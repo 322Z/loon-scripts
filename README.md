@@ -6,9 +6,9 @@
 
 | 文件 | 说明 |
 |---|---|
-| `chery_sign.lpt` | 奇瑞汽车每周签到 · 插件（Loon 里装这个） |
+| `chery_sign.lpt` | 奇瑞汽车每日签到（每天 08:00）· 插件（Loon 里装这个） |
 | `chery_daily.js` | 奇瑞签到脚本（插件里按 URL 远程引用） |
-| `jiangsu_oil.lpt` | 江苏每日油价 · 插件（Loon 里装这个） |
+| `jiangsu_oil.lpt` | 江苏油价周报（每周一 07:30）· 插件（Loon 里装这个） |
 | `jiangsu_oil.js` | 油价脚本（插件里按 URL 远程引用） |
 
 ## Loon 安装地址（插件页 + 填这两个）

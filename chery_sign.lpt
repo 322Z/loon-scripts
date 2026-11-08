@@ -1,5 +1,5 @@
-#!name = 奇瑞汽车每周签到
-#!desc = 每周一自动签到、分享两次并查询积分；脚本从本仓库远程加载，需要 Loon Build >= 988
+#!name = 奇瑞汽车每日签到
+#!desc = 每天自动签到、分享两次并查询积分；脚本从本仓库远程加载，需要 Loon Build >= 988
 #!author = 322Z
 #!homepage = https://github.com/322Z/loon-scripts
 #!date = 2026-11-08
@@ -11,11 +11,9 @@
 
 token = input,"",type=string,tag=CHERY_TOKEN,desc=填奇瑞 App 的 access_token（可在 GitHub Actions 日志里取）
 enabled = switch,true,type=boolean,tag=启用
-cron1 = input,"0 8 * * 1",type=string,tag=周几执行,desc=五段 cron，末位 1=周一（0 或 7=周日）
-cron2 = input,"0 12 * * 1",type=string,tag=补跑时间,desc=同样只在周一，重复跑不会重复计分
+cron1 = input,"0 8 * * *",type=string,tag=每天执行时间,desc=五段 cron：分 时 日 月 周；末位 * = 每天
 
 [Script]
 
-cron ${cron1} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=90, tag="奇瑞签到-周一上午"
-cron ${cron2} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=90, tag="奇瑞签到-周一补跑"
+cron ${cron1} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=90, tag="奇瑞签到-每日"
 generic then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=90, tag="奇瑞签到-手动测试", img_url="checkmark.circle"

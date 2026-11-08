@@ -1,5 +1,5 @@
-#!name = 江苏每日油价
-#!desc = 每天定时查询江苏省成品油价格、本轮涨跌与下轮预测，并推送通知；脚本从本仓库远程加载
+#!name = 江苏油价周报
+#!desc = 每周一查询江苏省成品油价格、本轮涨跌与下轮预测，并推送通知；脚本从本仓库远程加载
 #!author = 322Z
 #!homepage = https://github.com/322Z/loon-scripts
 #!date = 2026-11-08
@@ -11,9 +11,9 @@
 
 region = input,"江苏",type=string,tag=地区,desc=可改成 浙江 / 上海 / 山东 等，不用写「省」「市」
 enabled = switch,true,type=boolean,tag=启用
-cron1 = input,"30 7 * * *",type=string,tag=每天执行时间,desc=五段 cron：分 时 日 月 周
+cron1 = input,"30 7 * * 1",type=string,tag=每周执行时间,desc=五段 cron：末位 1=周一（0 或 7=周日）
 
 [Script]
 
-cron ${cron1} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/jiangsu_oil.js", {${region}}) with enable=${enabled}, timeout=60, tag="油价-每日"
+cron ${cron1} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/jiangsu_oil.js", {${region}}) with enable=${enabled}, timeout=60, tag="油价-每周一"
 generic then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/jiangsu_oil.js", {${region}}) with enable=${enabled}, timeout=60, tag="油价-手动测试", img_url="fuelpump"
