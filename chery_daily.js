@@ -260,19 +260,35 @@ function shareOne(token, arts, index, success, cb) {
   encPost("/web/community/contents/" + aid + "/share", token, { contentId: aid },
     function (err, resp, data) {
       var sd = parseJson(data) || {};
-      if (sd.status !== 200) return shareOne(token, arts, index + 1, success, cb);
-      trigger(token, "SJ10003", function (e2, ok2) {
+      console.log("分享请求 id=" + aid + " → " + (err ? "ERR " + err :
+        "status=" + sd.status + " msg=" + (sd.message || "")));
+      if (err || sd.status !== 200) return shareOne(token, arts, index + 1, success, cb);
+      trigger(token, "SJ10003", function (e2, ok2, m2) {
+        console.log("领奖 SJ10003 → " + (ok2 ? "OK" : "FAIL") + " " + (m2 || ""));
         shareOne(token, arts, index + 1, success + (ok2 ? 1 : 0), cb);
       });
     });
 }
 
 function doShare(token, cb) {
-  encGet("/web/community/recommend/contents", token, "", function (err, resp, data) {
+  /* 关键：推荐列表必须把 pageNo / pageSize 一起放进 encryptParam，
+     否则服务端返回空列表（对照 Python 版 daily.py do_share 的写法） */
+  $httpClient.get({
+    url: BASE + "/web/community/recommend/contents?encryptParam=" +
+         encParam("pageNo=1&pageSize=10&access_token=" + token + "&terminal=3"),
+    headers: APP_HEADERS,
+    timeout: REQ_TIMEOUT,
+    node: FORCE_NODE,
+    "auto-redirect": false
+  }, function (err, resp, data) {
     if (err) return cb(err, 0);
     var d = parseJson(data) || {};
     var arts = findArticles(d, 0) || [];
-    if (!arts.length) return cb(null, 0);
+    console.log("推荐列表条目数: " + arts.length);
+    if (!arts.length) {
+      console.log("推荐列表为空，原始返回前 200 字: " + String(data).slice(0, 200));
+      return cb(null, 0);
+    }
     shareOne(token, arts.slice(0, 2), 0, 0, cb);
   });
 }
@@ -311,6 +327,7 @@ function main() {
 
     trigger(token, "SJ10002", function (e2, okSign, msgSign) {
       console.log((okSign ? "OK" : "FAIL") + " 签到: " + msgSign);
+      if (e2) console.log("签到请求错误: " + e2);
 
       doShare(token, function (e3, shared) {
         console.log((shared > 0 ? "OK" : "FAIL") + " 分享: 成功 " + shared + "/2 次");
