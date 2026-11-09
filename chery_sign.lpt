@@ -15,5 +15,5 @@ cron1 = input,"0 8 * * *",type=string,tag=每天执行时间,desc=五段 cron：
 
 [Script]
 
-cron ${cron1} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=90, tag="奇瑞签到-每日"
-generic then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=90, tag="奇瑞签到-手动测试", img_url="checkmark.circle"
+cron ${cron1} then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=120, tag="奇瑞签到-每日"
+generic then script("https://raw.githubusercontent.com/322Z/loon-scripts/main/chery_daily.js", {${token}}) with enable=${enabled}, timeout=120, tag="奇瑞签到-手动测试", img_url="checkmark.circle"

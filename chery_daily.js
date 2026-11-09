@@ -109,8 +109,10 @@ function randomBytes(n) {
 /* 测试用：固定 IV，正常运行时为 null */
 var TEST_IV = null;
 
-/* 单次请求超时：8 次请求 × 8s < 插件里 90s 的脚本超时 */
-var REQ_TIMEOUT = 8000;
+/* 单次请求超时：手机网络到奇瑞网关常要 10s+，给足 15s；失败自动重试一次 */
+var REQ_TIMEOUT = 15000;
+/* 国内接口强制直连，避免走代理节点导致超时 */
+var FORCE_NODE = "DIRECT";
 
 /* AES-256-CBC + PKCS7，输出 base64(iv + ciphertext)，并把 "+" 换成 "-"（与 Python 版一致） */
 function aesEncrypt(plain) {
@@ -161,6 +163,7 @@ function encPost(path, token, payload, cb) {
     headers: APP_HEADERS,
     body: body,
     timeout: REQ_TIMEOUT,
+    node: FORCE_NODE,
     "auto-redirect": false
   }, cb);
 }
@@ -177,17 +180,26 @@ function encGet(path, token, extraQuery, cb) {
     url: url,
     headers: APP_HEADERS,
     timeout: REQ_TIMEOUT,
+    node: FORCE_NODE,
     "auto-redirect": false
   }, cb);
 }
 
-function getInfo(token, cb) {
+function getInfo(token, cb, attempt) {
+  attempt = attempt || 1;
   $httpClient.get({
     url: BASE + "/web/user/current/details?access_token=" + token + "&terminal=3",
     headers: UA_HEADERS,
-    timeout: REQ_TIMEOUT
+    timeout: REQ_TIMEOUT,
+    node: FORCE_NODE
   }, function (err, resp, data) {
-    if (err) return cb(err);
+    if (err) {
+      if (attempt < 2) {
+        console.log("读取账号信息超时，重试一次");
+        return setTimeout(function () { getInfo(token, cb, attempt + 1); }, 1000);
+      }
+      return cb(err);
+    }
     var d = parseJson(data);
     if (!d || !d.data) return cb("查询积分失败: " + String(data).slice(0, 100));
     var acc = d.data.pointAccount || {};
