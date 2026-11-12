@@ -2,6 +2,8 @@
 // 数据源：金投网城市油价数据中心（公开接口，允许跨域）
 //   价格表 https://datacenter.cngold.org/city_oil/all_price_by_year/
 //   调价窗口 https://datacenter.cngold.org/city_oil/near_time/
+// 说明：不再抓第三方「预计涨/跌」文案（qiyoujiage 等站点常年不更新，曾出现
+//       实际降价却仍写「预计上调」的误导），只报官方已公布的真实价格与涨跌。
 // 插件里用 [Argument] 传地区名，默认「江苏」；脚本也可直接以字符串参数传地区名。
 
 var API_PRICE = "https://datacenter.cngold.org/city_oil/all_price_by_year/";
@@ -102,7 +104,7 @@ function forecastLine(fc) {
   return "预计 " + sign + amount;
 }
 
-function buildMessage(region, rows, near, fc) {
+function buildMessage(region, rows, near) {
   var list = pickRegion(rows, region);
   if (!list.length) return { ok: false, msg: "没找到「" + region + "」的价格数据" };
 
@@ -118,21 +120,22 @@ function buildMessage(region, rows, near, fc) {
     lines.push(rows2[i][0] + "  " + Number(rows2[i][1]).toFixed(2) + "  " + chg(rows2[i][2]) + " 元/升");
   }
 
+  // 价格数据是哪一轮的：没有这个标注，箭头很容易被误读成「刚刚涨/跌」
+  var dataMd = cur.date ? cur.date.slice(5, 7) + "-" + cur.date.slice(8, 10) : "";
+
   var tip = "";
   if (near) {
-    var d = daysUntil(near);
+    var d = daysUntil(near);       // near 是「生效日」，实际时点是它的前一日 24 时
     var md = near.slice(5, 7) + "月" + near.slice(8, 10) + "日";
-    if (d === 0) tip = "今晚 24 时调价";
-    else if (d === 1) tip = "明晚 24 时调价";
-    else if (d > 1) tip = "下轮 " + md + " 0时";
-    else tip = "下轮 " + md;
+    if (d === 0) tip = "今晨 0 时已调价";
+    else if (d === 1) tip = "今晚 24 时调价";
+    else if (d > 1) tip = md + " 24 时调价";
+    else tip = "调价窗口待公布";
   }
 
-  var fcLine = forecastLine(fc);
+  var foot = (dataMd ? "数据 " + dataMd : "") + (tip ? (dataMd ? " ｜ " : "") + tip : "");
 
-  var content = lines.join("\n") +
-                (tip ? "\n" + tip : "") +
-                (fcLine ? "\n" + fcLine : "");
+  var content = lines.join("\n") + (foot ? "\n" + foot : "");
   return { ok: true, title: region + "油价", content: content, date: cur.date };
 }
 
@@ -161,24 +164,10 @@ function main() {
       var n = parseJson(d2);
       if (n && n.data && n.data.length > 1) near = n.data[1].date;
 
-      var slug = SLUG[region];
-      if (!slug) {
-        console.log("该地区没有预测源，跳过下一轮预测");
-        finish(near, null);
-        return;
-      }
+      finish(near);
 
-      $httpClient.get({ url: API_FORECAST.replace("{slug}", slug), headers: HEADERS, timeout: 10000 },
-        function (e3, r3, d3) {
-          var fc = null;
-          if (!e3) fc = parseForecast(String(d3));
-          else console.log("预测接口失败，跳过预测: " + e3);
-          if (!fc) console.log("预测文案没取到，本次只发价格");
-          finish(near, fc);
-        });
-
-      function finish(nearDate, fc) {
-        var built = buildMessage(region, d.data, nearDate, fc);
+      function finish(nearDate) {
+        var built = buildMessage(region, d.data, nearDate);
         if (!built.ok) {
           console.log(built.msg);
           $notification.post("油价查询失败", region, built.msg);
