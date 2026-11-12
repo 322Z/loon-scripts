@@ -4,6 +4,8 @@
 //   调价窗口 https://datacenter.cngold.org/city_oil/near_time/
 // 说明：不再抓第三方「预计涨/跌」文案（qiyoujiage 等站点常年不更新，曾出现
 //       实际降价却仍写「预计上调」的误导），只报官方已公布的真实价格与涨跌。
+// 兜底：调价日当天，金投网还没入库新价时，从东方财富快讯抓国家发改委的
+//       官方通告（标题即「x月x日24时起 汽柴油每吨下调xxx元」），补一行方向。
 // 插件里用 [Argument] 传地区名，默认「江苏」；脚本也可直接以字符串参数传地区名。
 
 var API_PRICE = "https://datacenter.cngold.org/city_oil/all_price_by_year/";
@@ -104,7 +106,70 @@ function forecastLine(fc) {
   return "预计 " + sign + amount;
 }
 
-function buildMessage(region, rows, near) {
+var API_NEWS = "https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_50_1_.html";
+
+/* 从东财快讯里找最近 3 天内、国家发改委发布的成品油调价通告 */
+function parseNews(text) {
+  if (typeof text !== "string" || text.length < 10) return null;
+  var i = text.indexOf("{");
+  if (i < 0) return null;
+  var obj = parseJson(text.slice(i));
+  if (!obj || !obj.LivesList) return null;
+
+  var nowMs = new Date().getTime();
+  var best = null;
+  for (var k = 0; k < obj.LivesList.length; k++) {
+    var it = obj.LivesList[k];
+    var t = String(it.title || "");
+    if (!/汽、?柴油|成品油/.test(t)) continue;
+
+    var dm = t.match(/每吨(?:分别)?(上调|下调|提高|降低)([0-9.]+)元(?:、([0-9.]+)元)?/);
+    if (!dm) continue;
+
+    var when = String(it.showtime || "");
+    var ts = Date.parse(when.replace(/-/g, "/"));
+    if (!isNaN(ts) && nowMs - ts > 3 * 86400000) continue;   // 超过 3 天的旧闻不要
+
+    var eff = t.match(/([0-9]{1,2})月([0-9]{1,2})日24时/);
+    best = {
+      dir: dm[1],
+      gas: dm[2],
+      diesel: dm[3] || "",
+      month: eff ? Number(eff[1]) : 0,
+      day: eff ? Number(eff[2]) : 0,
+      time: when
+    };
+    break;                                                    // 快讯按时间倒序，第一条最新的就是结果
+  }
+  return best;
+}
+
+function newsLine(fc, curDate) {
+  if (!fc) return "";
+
+  // 「x月x日24时」= 次日 0 点生效，所以先把生效日算成 day+1
+  var eff = null;
+  if (fc.month && fc.day) {
+    var y = new Date().getFullYear();
+    var dt = new Date(y, fc.month - 1, fc.day + 1);
+    eff = dt.getFullYear() + "-" + ("0" + (dt.getMonth() + 1)).slice(-2) + "-" + ("0" + dt.getDate()).slice(-2);
+  }
+
+  // 价格表已经收录了新价，就不需要官方兜底那一行了
+  if (eff && curDate && curDate >= eff) return "";
+
+  var when = "调价";
+  if (eff) {
+    var d = daysUntil(eff);
+    if (d === 1) when = "今晚24时";
+    else if (d === 0) when = "今晨0时";
+    else if (d > 1) when = fc.month + "月" + fc.day + "日24时";
+    else when = "最近一次";
+  }
+  return "官方 " + when + " " + fc.dir + " " + fc.gas + "元/吨";
+}
+
+function buildMessage(region, rows, near, fc) {
   var list = pickRegion(rows, region);
   if (!list.length) return { ok: false, msg: "没找到「" + region + "」的价格数据" };
 
@@ -133,7 +198,13 @@ function buildMessage(region, rows, near) {
     else tip = "调价窗口待公布";
   }
 
-  var foot = (dataMd ? "数据 " + dataMd : "") + (tip ? (dataMd ? " ｜ " : "") + tip : "");
+  var nl = newsLine(fc, cur.date);
+  var parts = [];
+  if (dataMd) parts.push("数据 " + dataMd);
+  // 有官方通告时它自带时点，就不再重复一行「今晚24时调价」
+  if (nl) parts.push(nl);
+  else if (tip) parts.push(tip);
+  var foot = parts.join(" ｜ ");
 
   var content = lines.join("\n") + (foot ? "\n" + foot : "");
   return { ok: true, title: region + "油价", content: content, date: cur.date };
@@ -164,10 +235,15 @@ function main() {
       var n = parseJson(d2);
       if (n && n.data && n.data.length > 1) near = n.data[1].date;
 
-      finish(near);
+      $httpClient.get({ url: API_NEWS, headers: HEADERS, timeout: 10000 }, function (e4, r4, d4) {
+        var fc = null;
+        if (!e4) fc = parseNews(String(d4));
+        else console.log("快讯接口失败，跳过官方兜底: " + e4);
+        finish(near, fc);
+      });
 
-      function finish(nearDate) {
-        var built = buildMessage(region, d.data, nearDate);
+      function finish(nearDate, fc) {
+        var built = buildMessage(region, d.data, nearDate, fc);
         if (!built.ok) {
           console.log(built.msg);
           $notification.post("油价查询失败", region, built.msg);
